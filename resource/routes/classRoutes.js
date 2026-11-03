@@ -22,11 +22,11 @@ router.route('/')
 router.get('/:classId/students', verifyToken, getStudentsInClass);
 router.get('/:classId/student', verifyToken, getStudentsInClass);
 
-router.get('/:classId/attendance-summary', getAttendanceSummary);
-router.get('/:id/attendance-summary', getAttendanceSummary);
+router.get('/:classId/attendance-summary', verifyToken, getAttendanceSummary);
+router.get('/:id/attendance-summary', verifyToken, getAttendanceSummary);
 
-router.post('/:studentId/attendances', createOrUpdateMultipleAttendances);
 router.post('/:classId/attendances', createOrUpdateMultipleAttendances);
+router.post('/:studentId/attendances', createOrUpdateMultipleAttendances);
 router.post('/:id/attendances', createOrUpdateMultipleAttendances);
 
 router.route('/:id')

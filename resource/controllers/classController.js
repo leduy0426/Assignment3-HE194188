@@ -70,7 +70,7 @@ exports.getStudentsInClass = async (req, res, next) => {
 
         const classObj = await Class.findById(classId).populate('enrollments.studentId', 'studentCode fullName email');
         if (!classObj) {
-            return res.status(401).json({ message: 'Class not found' });
+            return res.status(404).json({ message: 'Class not found' });
         }
 
         let statusParam = req.query.status;
@@ -86,16 +86,16 @@ exports.getStudentsInClass = async (req, res, next) => {
         }
 
         const enrollments = classObj.enrollments || [];
-        const matched = enrollments.filter(item => {
+        const matchedEnrollments = enrollments.filter(item => {
             return item.status && item.status.toLowerCase() === statusParam && item.studentId;
         });
 
-        const students = matched.map(item => {
+        const students = matchedEnrollments.map(item => {
             const s = item.studentId;
             return {
-                getStudentById: s._id,
                 studentId: s._id,
                 _id: s._id,
+                getStudentById: s._id,
                 studentCode: s.studentCode,
                 fullName: s.fullName,
                 email: s.email
@@ -137,12 +137,34 @@ exports.getAttendanceSummary = async (req, res, next) => {
                 return sId === student._id.toString();
             });
 
+            if (studentAttendances.length === 0) {
+                return {
+                    Student: student.studentCode,
+                    student: student.studentCode,
+                    studentCode: student.studentCode,
+                    studentId: student._id,
+                    fullName: student.fullName,
+                    "Total Sesions": 0,
+                    "Total Sessions": 0,
+                    totalSessions: 0,
+                    Present: 0,
+                    present: 0,
+                    Absent: 0,
+                    absent: 0,
+                    "Attendance Rate": "0.0%",
+                    attendanceRate: "0.0%",
+                    Warning: true,
+                    warning: true
+                };
+            }
+
             const present = studentAttendances.filter(a => a.status === 'PRESENT').length;
             const absent = studentAttendances.filter(a => a.status === 'ABSENT').length;
             const totalSessions = totalClassSessions || (present + absent);
-            const rateVal = totalSessions > 0 ? (present / totalSessions) * 100 : 0;
-            const attendanceRate = `${rateVal.toFixed(1)}%`;
-            const warning = totalSessions > 0 ? (absent / totalSessions > 0.2) : false;
+            const rawRate = totalSessions > 0 ? (present / totalSessions) * 100 : 0;
+            const roundedRate = Math.round(rawRate * 10) / 10;
+            const attendanceRate = `${roundedRate.toFixed(1)}%`;
+            const warning = roundedRate < 80;
 
             return {
                 Student: student.studentCode,
@@ -399,78 +421,84 @@ exports.removeStudentFromClass = async (req, res, next) => {
 
 exports.createOrUpdateMultipleAttendances = async (req, res, next) => {
     try {
-        const paramId = req.params.studentId || req.params.classId || req.params.id;
+        const classId = req.params.classId || req.params.id || req.params.studentId;
 
-        if (paramId && !mongoose.isObjectIdOrHexString(paramId)) {
-            return res.status(400).json({ message: 'Invalid ID format' });
+        if (!mongoose.isObjectIdOrHexString(classId)) {
+            return res.status(400).json({ message: 'Invalid classId format' });
         }
 
-        let classObj = null;
-        let studentObj = null;
-        if (paramId) {
-            classObj = await Class.findById(paramId);
-            if (!classObj) {
-                studentObj = await Student.findById(paramId);
+        const classObj = await Class.findById(classId);
+        if (!classObj) {
+            return res.status(404).json({ message: 'Class not found' });
+        }
+
+        const { date } = req.body || {};
+        const rawRecords = req.body?.records || req.body?.attendances || (Array.isArray(req.body) ? req.body : null);
+
+        if (!date) {
+            return res.status(400).json({ message: 'date is required' });
+        }
+
+        const parsedDate = new Date(date);
+        if (isNaN(parsedDate.getTime())) {
+            return res.status(400).json({ message: 'Invalid date format' });
+        }
+
+        const now = new Date();
+        const todayEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+        if (parsedDate > todayEnd) {
+            return res.status(400).json({ message: 'Date cannot be in the future' });
+        }
+
+        if (!Array.isArray(rawRecords) || rawRecords.length === 0) {
+            return res.status(400).json({ message: 'records must be a non-empty array' });
+        }
+
+        const enrolledEnrollments = (classObj.enrollments || []).filter(e => {
+            return e.status && e.status.toLowerCase() === 'enrolled' && e.studentId;
+        });
+
+        const enrolledMap = new Map();
+        enrolledEnrollments.forEach(e => {
+            enrolledMap.set(e.studentId.toString(), true);
+        });
+
+        const seenStudents = new Set();
+        for (const item of rawRecords) {
+            if (!item.studentId || !mongoose.isObjectIdOrHexString(item.studentId)) {
+                return res.status(400).json({ message: 'Invalid studentId in records' });
             }
-            if (!classObj && !studentObj) {
-                return res.status(404).json({ message: 'Class or Student not found' });
+
+            const sIdStr = item.studentId.toString();
+            if (!enrolledMap.has(sIdStr)) {
+                return res.status(400).json({ message: `Student ${sIdStr} is not currently enrolled in class` });
             }
-        }
 
-        let rawList = [];
-        if (Array.isArray(req.body)) {
-            rawList = req.body;
-        } else if (req.body && Array.isArray(req.body.attendances)) {
-            rawList = req.body.attendances.map(item => ({
-                ...item,
-                date: item.date || req.body.date,
-                classId: item.classId || req.body.classId,
-                studentId: item.studentId || req.body.studentId
-            }));
-        } else if (req.body && Array.isArray(req.body.records)) {
-            rawList = req.body.records.map(item => ({
-                ...item,
-                date: item.date || req.body.date,
-                classId: item.classId || req.body.classId,
-                studentId: item.studentId || req.body.studentId
-            }));
-        } else if (req.body && req.body.status) {
-            rawList = [req.body];
-        }
-
-        if (rawList.length === 0) {
-            return res.status(400).json({ message: 'Attendance records are required' });
-        }
-
-        const results = [];
-        for (const item of rawList) {
-            const studentId = item.studentId || (studentObj ? studentObj._id.toString() : null) || (!classObj ? paramId : null) || req.body.studentId;
-            const classId = item.classId || (classObj ? classObj._id.toString() : null) || (!studentObj ? paramId : null) || req.body.classId;
-            const dateStr = item.date || req.body.date;
             const status = item.status ? String(item.status).toUpperCase() : null;
-
-            if (!studentId || !classId || !dateStr || !status) {
-                return res.status(400).json({ message: 'studentId, classId, date, and status are required for each record' });
-            }
-
-            if (!mongoose.isObjectIdOrHexString(studentId) || !mongoose.isObjectIdOrHexString(classId)) {
-                return res.status(400).json({ message: 'Invalid studentId or classId format' });
-            }
-
-            if (!['PRESENT', 'ABSENT'].includes(status)) {
+            if (!status || !['PRESENT', 'ABSENT'].includes(status)) {
                 return res.status(400).json({ message: 'status must be PRESENT or ABSENT' });
             }
 
-            const parsedDate = new Date(dateStr);
-            if (isNaN(parsedDate.getTime())) {
-                return res.status(400).json({ message: 'Invalid date format' });
-            }
-            const normalizedDate = new Date(parsedDate);
-            normalizedDate.setUTCHours(0, 0, 0, 0);
+            seenStudents.add(sIdStr);
+        }
+
+        if (seenStudents.size !== enrolledMap.size) {
+            return res.status(400).json({
+                message: 'The request must include attendance records for all students currently enrolled in that class'
+            });
+        }
+
+        const normalizedDate = new Date(parsedDate);
+        normalizedDate.setUTCHours(0, 0, 0, 0);
+
+        const results = [];
+        for (const item of rawRecords) {
+            const studentId = item.studentId;
+            const status = String(item.status).toUpperCase();
 
             const record = await Attendance.findOneAndUpdate(
-                { studentId, classId, date: normalizedDate },
-                { studentId, classId, date: normalizedDate, status },
+                { classId: classObj._id, studentId, date: normalizedDate },
+                { classId: classObj._id, studentId, date: normalizedDate, status },
                 { new: true, upsert: true, setDefaultsOnInsert: true }
             );
             results.push(record);

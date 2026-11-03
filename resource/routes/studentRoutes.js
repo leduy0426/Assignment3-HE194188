@@ -9,16 +9,18 @@ const {
     getStudentAttendanceHistory,
     createOrUpdateMultipleAttendances
 } = require('../controllers/studentController');
+const { verifyToken } = require('../middlewares/auth');
 
 router.route('/')
     .get(getAllStudents)
     .post(createStudent);
 
-router.get('/:studentId/attendances', getStudentAttendanceHistory);
-router.get('/:studentId/attendanceExists', getStudentAttendanceHistory);
-router.get('/:id/attendances', getStudentAttendanceHistory);
-router.get('/:id/attendanceExists', getStudentAttendanceHistory);
+router.get('/:studentId/attendances', verifyToken, getStudentAttendanceHistory);
+router.get('/:studentId/attendanceExists', verifyToken, getStudentAttendanceHistory);
+router.get('/:id/attendances', verifyToken, getStudentAttendanceHistory);
+router.get('/:id/attendanceExists', verifyToken, getStudentAttendanceHistory);
 
+router.post('/:classId/attendances', createOrUpdateMultipleAttendances);
 router.post('/:studentId/attendances', createOrUpdateMultipleAttendances);
 router.post('/:id/attendances', createOrUpdateMultipleAttendances);
 

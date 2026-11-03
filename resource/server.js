@@ -33,6 +33,11 @@ const users = [
         studentId: 'HE194188',
         email: 'he194188@fpt.edu.vn',
         password: 'he194188@123'
+    },
+    {
+        studentId: 'HE194188',
+        email: 'masv@fpt.edu.vn',
+        password: 'masv@123'
     }
 ];
 
@@ -62,7 +67,7 @@ app.post('/api/auth/login', (req, res) => {
     });
 
     return res.status(200).json({
-        message: 'Login succesfully',
+        message: 'Login successful',
         token: token
     });
 });
@@ -84,12 +89,12 @@ app.get('/', (req, res) => {
 
 app.get('/api/classes/:classId/students', verifyToken, getStudentsInClass);
 app.get('/api/classes/:classId/student', verifyToken, getStudentsInClass);
+app.get('/api/classes/:classId/attendance-summary', verifyToken, getAttendanceSummary);
+app.get('/api/students/:studentId/attendances', verifyToken, getStudentAttendanceHistory);
+app.get('/api/students/:studentId/attendanceExists', verifyToken, getStudentAttendanceHistory);
 
-app.get('/api/classes/:classId/attendance-summary', getAttendanceSummary);
-app.get('/api/students/:studentId/attendances', getStudentAttendanceHistory);
-app.get('/api/students/:studentId/attendanceExists', getStudentAttendanceHistory);
-app.post('/api/classes/:studentId/attendances', createOrUpdateMultipleAttendances);
 app.post('/api/classes/:classId/attendances', createOrUpdateMultipleAttendances);
+app.post('/api/classes/:studentId/attendances', createOrUpdateMultipleAttendances);
 app.post('/api/students/:studentId/attendances', createOrUpdateMultipleAttendances);
 
 app.use('/api/students', studentRoutes);
