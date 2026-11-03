@@ -2,8 +2,6 @@ const Attendance = require('../models/Attendance');
 const Class = require('../models/Class');
 const Student = require('../models/Student');
 
-// @desc    Get all attendances (filter by classId, studentId, date, status)
-// @route   GET /api/attendances
 exports.getAllAttendances = async (req, res, next) => {
     try {
         const { classId, studentId, date, status } = req.query;
@@ -27,7 +25,6 @@ exports.getAllAttendances = async (req, res, next) => {
                 err.statusCode = 400;
                 return next(err);
             }
-            // Match the whole day (UTC)
             const startOfDay = new Date(targetDate);
             startOfDay.setUTCHours(0, 0, 0, 0);
             const endOfDay = new Date(targetDate);
@@ -50,8 +47,6 @@ exports.getAllAttendances = async (req, res, next) => {
     }
 };
 
-// @desc    Get attendance by ID
-// @route   GET /api/attendances/:id
 exports.getAttendanceById = async (req, res, next) => {
     try {
         const attendance = await Attendance.findById(req.params.id)
@@ -73,8 +68,6 @@ exports.getAttendanceById = async (req, res, next) => {
     }
 };
 
-// @desc    Record single attendance
-// @route   POST /api/attendances
 exports.recordAttendance = async (req, res, next) => {
     try {
         const { studentId, classId, date, status } = req.body;
@@ -99,7 +92,6 @@ exports.recordAttendance = async (req, res, next) => {
             return next(err);
         }
 
-        // Validate Class
         const classObj = await Class.findById(classId);
         if (!classObj) {
             const err = new Error(`Class not found with id ${classId}`);
@@ -113,7 +105,6 @@ exports.recordAttendance = async (req, res, next) => {
             return next(err);
         }
 
-        // Validate Student exists
         const student = await Student.findById(studentId);
         if (!student) {
             const err = new Error(`Student not found with id ${studentId}`);
@@ -121,7 +112,6 @@ exports.recordAttendance = async (req, res, next) => {
             return next(err);
         }
 
-        // Validate Student is enrolled in Class
         const enrollment = classObj.enrollments.find(
             e => e.studentId.toString() === studentId.toString()
         );
@@ -138,11 +128,9 @@ exports.recordAttendance = async (req, res, next) => {
             return next(err);
         }
 
-        // Normalize date to midnight UTC for standard daily comparison
         const normalizedDate = new Date(attendanceDate);
         normalizedDate.setUTCHours(0, 0, 0, 0);
 
-        // Check if attendance already exists on that day
         const existingRecord = await Attendance.findOne({
             studentId,
             classId,
@@ -174,8 +162,6 @@ exports.recordAttendance = async (req, res, next) => {
     }
 };
 
-// @desc    Record bulk attendance for an entire class on a given date
-// @route   POST /api/attendances/bulk
 exports.recordBulkAttendance = async (req, res, next) => {
     try {
         const { classId, date, attendances } = req.body;
@@ -256,14 +242,12 @@ exports.recordBulkAttendance = async (req, res, next) => {
     }
 };
 
-// @desc    Update attendance status (PRESENT <-> ABSENT)
-// @route   PUT /api/attendances/:id
 exports.updateAttendance = async (req, res, next) => {
     try {
         const { status } = req.body;
 
         if (!status) {
-            const err = new Error('status is required');
+            const err = new Error("status is required in request body ('PRESENT' or 'ABSENT')");
             err.statusCode = 400;
             return next(err);
         }
@@ -283,20 +267,18 @@ exports.updateAttendance = async (req, res, next) => {
         }
 
         attendance.status = upperStatus;
-        const updatedAttendance = await attendance.save();
+        const updated = await attendance.save();
 
         res.status(200).json({
             success: true,
-            message: 'Attendance updated successfully',
-            data: updatedAttendance
+            message: 'Attendance status updated successfully',
+            data: updated
         });
     } catch (error) {
         next(error);
     }
 };
 
-// @desc    Delete attendance record
-// @route   DELETE /api/attendances/:id
 exports.deleteAttendance = async (req, res, next) => {
     try {
         const attendance = await Attendance.findById(req.params.id);
@@ -317,8 +299,6 @@ exports.deleteAttendance = async (req, res, next) => {
     }
 };
 
-// @desc    Get attendance report & exam eligibility for a class
-// @route   GET /api/attendances/report/class/:classId
 exports.getClassAttendanceReport = async (req, res, next) => {
     try {
         const { classId } = req.params;
@@ -333,14 +313,11 @@ exports.getClassAttendanceReport = async (req, res, next) => {
             return next(err);
         }
 
-        // Get all attendance records of this class
         const attendances = await Attendance.find({ classId });
 
-        // Total distinct dates in this class
         const distinctDates = [...new Set(attendances.map(a => a.date.toISOString().split('T')[0]))];
         const totalSessions = distinctDates.length;
 
-        // Group attendance by student
         const studentReports = classObj.enrollments.map(item => {
             const student = item.studentId;
             if (!student) {
@@ -390,8 +367,6 @@ exports.getClassAttendanceReport = async (req, res, next) => {
     }
 };
 
-// @desc    Get attendance report for a specific student
-// @route   GET /api/attendances/report/student/:studentId
 exports.getStudentAttendanceReport = async (req, res, next) => {
     try {
         const { studentId } = req.params;
@@ -452,4 +427,3 @@ exports.getStudentAttendanceReport = async (req, res, next) => {
         next(error);
     }
 };
-

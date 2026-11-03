@@ -1,6 +1,4 @@
 const mongoose = require('mongoose');
-//a class references a buject through the subjectId field
-//a class contains an enrollments array. Each enrollment entry includes studentId and status (ENROLLED or DROPPED)
 
 const enrollmentSchema = new mongoose.Schema(
     {
@@ -55,4 +53,3 @@ const classSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('Class', classSchema);
-

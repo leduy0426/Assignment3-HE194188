@@ -1,8 +1,6 @@
 const Subject = require('../models/Subject');
 const Class = require('../models/Class');
 
-// @desc    Get all subjects (filter by status, search keyword)
-// @route   GET /api/subjects
 exports.getAllSubjects = async (req, res, next) => {
     try {
         const { status, keyword } = req.query;
@@ -36,8 +34,6 @@ exports.getAllSubjects = async (req, res, next) => {
     }
 };
 
-// @desc    Get subject by ID
-// @route   GET /api/subjects/:id
 exports.getSubjectById = async (req, res, next) => {
     try {
         const subject = await Subject.findById(req.params.id);
@@ -56,8 +52,6 @@ exports.getSubjectById = async (req, res, next) => {
     }
 };
 
-// @desc    Create new subject
-// @route   POST /api/subjects
 exports.createSubject = async (req, res, next) => {
     try {
         const { code, name, credits, status } = req.body;
@@ -79,8 +73,6 @@ exports.createSubject = async (req, res, next) => {
     }
 };
 
-// @desc    Update subject
-// @route   PUT /api/subjects/:id
 exports.updateSubject = async (req, res, next) => {
     try {
         const { code, name, credits, status } = req.body;
@@ -109,8 +101,6 @@ exports.updateSubject = async (req, res, next) => {
     }
 };
 
-// @desc    Delete subject
-// @route   DELETE /api/subjects/:id
 exports.deleteSubject = async (req, res, next) => {
     try {
         const subjectId = req.params.id;
@@ -122,7 +112,6 @@ exports.deleteSubject = async (req, res, next) => {
             return next(err);
         }
 
-        // Check if referenced by any Class
         const classUsingSubject = await Class.findOne({ subjectId });
         if (classUsingSubject) {
             const err = new Error(`Cannot delete subject: It is being taught in class '${classUsingSubject.className}'`);
@@ -140,4 +129,3 @@ exports.deleteSubject = async (req, res, next) => {
         next(error);
     }
 };
-

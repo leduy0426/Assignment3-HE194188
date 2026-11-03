@@ -3,20 +3,17 @@ const errorHandler = (err, req, res, next) => {
     let message = err.message || 'Internal Server Error';
     let errors = err.errors || null;
 
-    // Handle Mongoose CastError (invalid ObjectId)
     if (err.name === 'CastError') {
         statusCode = 400;
         message = `Invalid format for field '${err.path}': value '${err.value}' is not a valid ObjectId`;
     }
 
-    // Handle Mongoose ValidationError
     if (err.name === 'ValidationError') {
         statusCode = 400;
         message = 'Validation failed';
         errors = Object.values(err.errors).map(e => e.message);
     }
 
-    // Handle MongoDB Duplicate Key (E11000)
     if (err.code === 11000) {
         statusCode = 409;
         const field = Object.keys(err.keyValue || {})[0];
@@ -33,4 +30,3 @@ const errorHandler = (err, req, res, next) => {
 };
 
 module.exports = errorHandler;
-

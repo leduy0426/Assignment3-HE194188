@@ -4,8 +4,6 @@ const Subject = require('../models/Subject');
 const Student = require('../models/Student');
 const Attendance = require('../models/Attendance');
 
-// @desc    Get all classes (with filters and populate)
-// @route   GET /api/classes
 exports.getAllClasses = async (req, res, next) => {
     try {
         const { status, subjectId, lecturerName } = req.query;
@@ -42,8 +40,6 @@ exports.getAllClasses = async (req, res, next) => {
     }
 };
 
-// @desc    Get class by ID
-// @route   GET /api/classes/:id
 exports.getClassById = async (req, res, next) => {
     try {
         const classObj = await Class.findById(req.params.id)
@@ -64,10 +60,6 @@ exports.getClassById = async (req, res, next) => {
     }
 };
 
-/**
- * Requirement 2: Get Students in a Class
- * Endpoint: GET /api/classes/:classId/students?status=enrolled
- */
 exports.getStudentsInClass = async (req, res, next) => {
     try {
         const { classId } = req.params;
@@ -78,7 +70,6 @@ exports.getStudentsInClass = async (req, res, next) => {
 
         const classObj = await Class.findById(classId).populate('enrollments.studentId', 'studentCode fullName email');
         if (!classObj) {
-            // As per requirement: "corresponding class does not exist => HTTP 401"
             return res.status(401).json({ message: 'Class not found' });
         }
 
@@ -117,8 +108,71 @@ exports.getStudentsInClass = async (req, res, next) => {
     }
 };
 
-// @desc    Create new class
-// @route   POST /api/classes
+exports.getAttendanceSummary = async (req, res, next) => {
+    try {
+        const { classId } = req.params;
+
+        if (!mongoose.isObjectIdOrHexString(classId)) {
+            return res.status(400).json({ message: 'Invalid classId format' });
+        }
+
+        const classObj = await Class.findById(classId).populate('enrollments.studentId', 'studentCode fullName email');
+        if (!classObj) {
+            return res.status(404).json({ message: 'Class not found' });
+        }
+
+        const attendances = await Attendance.find({ classId }).populate('studentId', 'studentCode fullName email');
+
+        const distinctDates = [...new Set(attendances.map(a => new Date(a.date).toISOString().split('T')[0]))];
+        const totalClassSessions = distinctDates.length;
+
+        const enrolledItems = (classObj.enrollments || []).filter(item => {
+            return item.status && item.status.toLowerCase() === 'enrolled' && item.studentId;
+        });
+
+        const summary = enrolledItems.map(item => {
+            const student = item.studentId;
+            const studentAttendances = attendances.filter(a => {
+                const sId = a.studentId?._id ? a.studentId._id.toString() : (a.studentId ? a.studentId.toString() : '');
+                return sId === student._id.toString();
+            });
+
+            const present = studentAttendances.filter(a => a.status === 'PRESENT').length;
+            const absent = studentAttendances.filter(a => a.status === 'ABSENT').length;
+            const totalSessions = totalClassSessions || (present + absent);
+            const rateVal = totalSessions > 0 ? (present / totalSessions) * 100 : 0;
+            const attendanceRate = `${rateVal.toFixed(1)}%`;
+            const warning = totalSessions > 0 ? (absent / totalSessions > 0.2) : false;
+
+            return {
+                Student: student.studentCode,
+                student: student.studentCode,
+                studentCode: student.studentCode,
+                studentId: student._id,
+                fullName: student.fullName,
+                "Total Sesions": totalSessions,
+                "Total Sessions": totalSessions,
+                totalSessions: totalSessions,
+                Present: present,
+                present: present,
+                Absent: absent,
+                absent: absent,
+                "Attendance Rate": attendanceRate,
+                attendanceRate: attendanceRate,
+                Warning: warning,
+                warning: warning
+            };
+        });
+
+        summary.sort((a, b) => (a.studentCode || '').localeCompare(b.studentCode || ''));
+
+        return res.status(200).json(summary);
+    } catch (error) {
+        if (next) next(error);
+        else return res.status(500).json({ message: error.message });
+    }
+};
+
 exports.createClass = async (req, res, next) => {
     try {
         const { className, subjectId, lecturerName, status } = req.body;
@@ -154,8 +208,6 @@ exports.createClass = async (req, res, next) => {
     }
 };
 
-// @desc    Update class
-// @route   PUT /api/classes/:id
 exports.updateClass = async (req, res, next) => {
     try {
         const { className, subjectId, lecturerName, status } = req.body;
@@ -196,8 +248,6 @@ exports.updateClass = async (req, res, next) => {
     }
 };
 
-// @desc    Delete class
-// @route   DELETE /api/classes/:id
 exports.deleteClass = async (req, res, next) => {
     try {
         const classId = req.params.id;
@@ -224,8 +274,6 @@ exports.deleteClass = async (req, res, next) => {
     }
 };
 
-// @desc    Enroll student into class
-// @route   POST /api/classes/:id/enroll
 exports.enrollStudent = async (req, res, next) => {
     try {
         const classId = req.params.id;
@@ -276,8 +324,6 @@ exports.enrollStudent = async (req, res, next) => {
     }
 };
 
-// @desc    Update enrollment status (enrolled / dropped)
-// @route   PATCH /api/classes/:id/enrollments/:studentId
 exports.updateEnrollmentStatus = async (req, res, next) => {
     try {
         const { id: classId, studentId } = req.params;
@@ -314,8 +360,6 @@ exports.updateEnrollmentStatus = async (req, res, next) => {
     }
 };
 
-// @desc    Remove student enrollment from class
-// @route   DELETE /api/classes/:id/enrollments/:studentId
 exports.removeStudentFromClass = async (req, res, next) => {
     try {
         const { id: classId, studentId } = req.params;
@@ -353,3 +397,88 @@ exports.removeStudentFromClass = async (req, res, next) => {
     }
 };
 
+exports.createOrUpdateMultipleAttendances = async (req, res, next) => {
+    try {
+        const paramId = req.params.studentId || req.params.classId || req.params.id;
+
+        if (paramId && !mongoose.isObjectIdOrHexString(paramId)) {
+            return res.status(400).json({ message: 'Invalid ID format' });
+        }
+
+        let classObj = null;
+        let studentObj = null;
+        if (paramId) {
+            classObj = await Class.findById(paramId);
+            if (!classObj) {
+                studentObj = await Student.findById(paramId);
+            }
+            if (!classObj && !studentObj) {
+                return res.status(404).json({ message: 'Class or Student not found' });
+            }
+        }
+
+        let rawList = [];
+        if (Array.isArray(req.body)) {
+            rawList = req.body;
+        } else if (req.body && Array.isArray(req.body.attendances)) {
+            rawList = req.body.attendances.map(item => ({
+                ...item,
+                date: item.date || req.body.date,
+                classId: item.classId || req.body.classId,
+                studentId: item.studentId || req.body.studentId
+            }));
+        } else if (req.body && Array.isArray(req.body.records)) {
+            rawList = req.body.records.map(item => ({
+                ...item,
+                date: item.date || req.body.date,
+                classId: item.classId || req.body.classId,
+                studentId: item.studentId || req.body.studentId
+            }));
+        } else if (req.body && req.body.status) {
+            rawList = [req.body];
+        }
+
+        if (rawList.length === 0) {
+            return res.status(400).json({ message: 'Attendance records are required' });
+        }
+
+        const results = [];
+        for (const item of rawList) {
+            const studentId = item.studentId || (studentObj ? studentObj._id.toString() : null) || (!classObj ? paramId : null) || req.body.studentId;
+            const classId = item.classId || (classObj ? classObj._id.toString() : null) || (!studentObj ? paramId : null) || req.body.classId;
+            const dateStr = item.date || req.body.date;
+            const status = item.status ? String(item.status).toUpperCase() : null;
+
+            if (!studentId || !classId || !dateStr || !status) {
+                return res.status(400).json({ message: 'studentId, classId, date, and status are required for each record' });
+            }
+
+            if (!mongoose.isObjectIdOrHexString(studentId) || !mongoose.isObjectIdOrHexString(classId)) {
+                return res.status(400).json({ message: 'Invalid studentId or classId format' });
+            }
+
+            if (!['PRESENT', 'ABSENT'].includes(status)) {
+                return res.status(400).json({ message: 'status must be PRESENT or ABSENT' });
+            }
+
+            const parsedDate = new Date(dateStr);
+            if (isNaN(parsedDate.getTime())) {
+                return res.status(400).json({ message: 'Invalid date format' });
+            }
+            const normalizedDate = new Date(parsedDate);
+            normalizedDate.setUTCHours(0, 0, 0, 0);
+
+            const record = await Attendance.findOneAndUpdate(
+                { studentId, classId, date: normalizedDate },
+                { studentId, classId, date: normalizedDate, status },
+                { new: true, upsert: true, setDefaultsOnInsert: true }
+            );
+            results.push(record);
+        }
+
+        return res.status(200).json(results);
+    } catch (error) {
+        if (next) next(error);
+        else return res.status(500).json({ message: error.message });
+    }
+};

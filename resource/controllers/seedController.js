@@ -20,8 +20,6 @@ function convertMongoJSON(obj) {
     return obj;
 }
 
-// @desc    Seed / Reset database from JSON files
-// @route   POST /api/seed
 exports.seedDatabase = async (req, res, next) => {
     try {
         const dbDir = path.join(__dirname, '..', 'database');
@@ -36,7 +34,6 @@ exports.seedDatabase = async (req, res, next) => {
         const classes = convertMongoJSON(classesRaw);
         const attendances = convertMongoJSON(attendancesRaw);
 
-        // Clear existing data
         await Promise.all([
             Student.deleteMany({}),
             Subject.deleteMany({}),
@@ -44,7 +41,6 @@ exports.seedDatabase = async (req, res, next) => {
             Attendance.deleteMany({})
         ]);
 
-        // Insert fresh data
         await Student.insertMany(students);
         await Subject.insertMany(subjects);
         await Class.insertMany(classes);
@@ -64,4 +60,3 @@ exports.seedDatabase = async (req, res, next) => {
         next(error);
     }
 };
-

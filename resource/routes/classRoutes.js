@@ -4,6 +4,8 @@ const {
     getAllClasses,
     getClassById,
     getStudentsInClass,
+    getAttendanceSummary,
+    createOrUpdateMultipleAttendances,
     createClass,
     updateClass,
     deleteClass,
@@ -17,20 +19,23 @@ router.route('/')
     .get(getAllClasses)
     .post(createClass);
 
-// Requirement 2: GET /api/classes/:classId/students?status=enrolled
-// Protected with verifyToken middleware as required by 3.3
 router.get('/:classId/students', verifyToken, getStudentsInClass);
 router.get('/:classId/student', verifyToken, getStudentsInClass);
+
+router.get('/:classId/attendance-summary', getAttendanceSummary);
+router.get('/:id/attendance-summary', getAttendanceSummary);
+
+router.post('/:studentId/attendances', createOrUpdateMultipleAttendances);
+router.post('/:classId/attendances', createOrUpdateMultipleAttendances);
+router.post('/:id/attendances', createOrUpdateMultipleAttendances);
 
 router.route('/:id')
     .get(getClassById)
     .put(updateClass)
     .delete(deleteClass);
 
-// Enrollment operations
 router.post('/:id/enroll', enrollStudent);
 router.patch('/:id/enrollments/:studentId', updateEnrollmentStatus);
 router.delete('/:id/enrollments/:studentId', removeStudentFromClass);
 
 module.exports = router;
-

@@ -5,12 +5,22 @@ const {
     getStudentById,
     createStudent,
     updateStudent,
-    deleteStudent
+    deleteStudent,
+    getStudentAttendanceHistory,
+    createOrUpdateMultipleAttendances
 } = require('../controllers/studentController');
 
 router.route('/')
     .get(getAllStudents)
     .post(createStudent);
+
+router.get('/:studentId/attendances', getStudentAttendanceHistory);
+router.get('/:studentId/attendanceExists', getStudentAttendanceHistory);
+router.get('/:id/attendances', getStudentAttendanceHistory);
+router.get('/:id/attendanceExists', getStudentAttendanceHistory);
+
+router.post('/:studentId/attendances', createOrUpdateMultipleAttendances);
+router.post('/:id/attendances', createOrUpdateMultipleAttendances);
 
 router.route('/:id')
     .get(getStudentById)
@@ -18,4 +28,3 @@ router.route('/:id')
     .delete(deleteStudent);
 
 module.exports = router;
-
